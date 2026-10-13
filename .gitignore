@@ -1,0 +1,2 @@
+# Výstupy auditů (mohou obsahovat citlivé údaje), nikdy necommitovat
+/reports/
