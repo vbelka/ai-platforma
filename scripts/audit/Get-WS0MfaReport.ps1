@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     WS0 audit: stav MFA – registrace metod, výchozí zabezpečení (security defaults), přehled podmíněného přístupu.
 
@@ -38,6 +38,10 @@
 .PARAMETER OutputPath
     Cílová složka. Výchozí <repo>/reports/<yyyy-MM-dd>_WS0 (mimo Git).
 
+.PARAMETER ClientId
+    Volitelné. AppId vlastní auditní aplikace (scripts/identity/New-WS0AuditApp.ps1). Bez něj se použije
+    Microsoft Graph Command Line Tools. Neukládat do repozitáře.
+
 .PARAMETER TenantId
     Volitelné. Doména tenantu. Neukládat do repozitáře.
 
@@ -47,16 +51,15 @@
 [CmdletBinding()]
 param(
     [string]$OutputPath,
-    [string]$TenantId
+    [string]$TenantId,
+    [string]$ClientId
 )
 
 $ErrorActionPreference = 'Stop'
 Import-Module (Join-Path $PSScriptRoot 'AuditCommon.psm1') -Force
 Assert-AuditModule -Name 'Microsoft.Graph.Authentication', 'Microsoft.Graph.Users', 'Microsoft.Graph.Reports', 'Microsoft.Graph.Identity.SignIns'
 
-$connectParams = @{ Scopes = @('AuditLog.Read.All', 'Policy.Read.All', 'User.Read.All'); ContextScope = 'Process'; NoWelcome = $true }
-if ($TenantId) { $connectParams.TenantId = $TenantId }
-Connect-MgGraph @connectParams
+$ownsConnection = Connect-AuditGraph -Scopes @('AuditLog.Read.All', 'Policy.Read.All', 'User.Read.All') -TenantId $TenantId -ClientId $ClientId
 
 $folder = Get-AuditOutputFolder -OutputPath $OutputPath
 Write-Host "WS0 MFA – výstupy: $folder"
@@ -146,5 +149,5 @@ $summary = [ordered]@{
 }
 Export-AuditJson -InputObject $summary -Folder $folder -FileName 'mfa-summary.json'
 
-Disconnect-MgGraph | Out-Null
+if ($ownsConnection) { Disconnect-MgGraph | Out-Null }
 Write-Host 'Hotovo. Nic nebylo změněno.'

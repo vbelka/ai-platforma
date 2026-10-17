@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     WS0 audit: přehled licencí (SKU), servisních plánů a licencí/plánů jednotlivých uživatelů.
 
@@ -35,6 +35,10 @@
 .PARAMETER OutputPath
     Cílová složka. Výchozí <repo>/reports/<yyyy-MM-dd>_WS0 (mimo Git).
 
+.PARAMETER ClientId
+    Volitelné. AppId vlastní auditní aplikace (scripts/identity/New-WS0AuditApp.ps1). Bez něj se použije
+    Microsoft Graph Command Line Tools. Neukládat do repozitáře.
+
 .PARAMETER TenantId
     Volitelné. Doména tenantu (např. contoso.onmicrosoft.com). Neukládat do repozitáře.
 
@@ -48,6 +52,7 @@
 param(
     [string]$OutputPath,
     [string]$TenantId,
+    [string]$ClientId,
     [switch]$IncludeSignInActivity
 )
 
@@ -58,9 +63,7 @@ Assert-AuditModule -Name 'Microsoft.Graph.Authentication', 'Microsoft.Graph.User
 $scopes = @('LicenseAssignment.Read.All', 'User.Read.All')
 if ($IncludeSignInActivity) { $scopes += 'AuditLog.Read.All' }
 
-$connectParams = @{ Scopes = $scopes; ContextScope = 'Process'; NoWelcome = $true }
-if ($TenantId) { $connectParams.TenantId = $TenantId }
-Connect-MgGraph @connectParams
+$ownsConnection = Connect-AuditGraph -Scopes $scopes -TenantId $TenantId -ClientId $ClientId
 
 $folder = Get-AuditOutputFolder -OutputPath $OutputPath
 Write-Host "WS0 licence – výstupy: $folder"
@@ -189,5 +192,5 @@ $summary = [ordered]@{
 }
 Export-AuditJson -InputObject $summary -Folder $folder -FileName 'licenses-summary.json'
 
-Disconnect-MgGraph | Out-Null
+if ($ownsConnection) { Disconnect-MgGraph | Out-Null }
 Write-Host 'Hotovo. Nic nebylo změněno.'

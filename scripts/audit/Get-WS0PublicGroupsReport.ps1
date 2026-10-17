@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     WS0 audit: veřejné týmy a veřejné skupiny Microsoft 365 (obsah dostupný komukoli v organizaci).
 
@@ -33,6 +33,10 @@
 .PARAMETER OutputPath
     Cílová složka. Výchozí <repo>/reports/<yyyy-MM-dd>_WS0 (mimo Git).
 
+.PARAMETER ClientId
+    Volitelné. AppId vlastní auditní aplikace (scripts/identity/New-WS0AuditApp.ps1). Bez něj se použije
+    Microsoft Graph Command Line Tools. Neukládat do repozitáře.
+
 .PARAMETER TenantId
     Volitelné. Doména tenantu. Neukládat do repozitáře.
 
@@ -46,6 +50,7 @@
 param(
     [string]$OutputPath,
     [string]$TenantId,
+    [string]$ClientId,
     [switch]$SkipOwners
 )
 
@@ -53,9 +58,7 @@ $ErrorActionPreference = 'Stop'
 Import-Module (Join-Path $PSScriptRoot 'AuditCommon.psm1') -Force
 Assert-AuditModule -Name 'Microsoft.Graph.Authentication', 'Microsoft.Graph.Groups'
 
-$connectParams = @{ Scopes = @('Group.Read.All'); ContextScope = 'Process'; NoWelcome = $true }
-if ($TenantId) { $connectParams.TenantId = $TenantId }
-Connect-MgGraph @connectParams
+$ownsConnection = Connect-AuditGraph -Scopes @('Group.Read.All') -TenantId $TenantId -ClientId $ClientId
 
 $folder = Get-AuditOutputFolder -OutputPath $OutputPath
 Write-Host "WS0 veřejné týmy/skupiny – výstupy: $folder"
@@ -100,5 +103,5 @@ $summary = [ordered]@{
 }
 Export-AuditJson -InputObject $summary -Folder $folder -FileName 'groups-summary.json'
 
-Disconnect-MgGraph | Out-Null
+if ($ownsConnection) { Disconnect-MgGraph | Out-Null }
 Write-Host 'Hotovo. Nic nebylo změněno.'

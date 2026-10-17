@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Shared helpers for WS0 audit scripts (read-only).
 
@@ -80,6 +80,36 @@ function Assert-AuditModule {
     }
 }
 
+function Connect-AuditGraph {
+    <#
+    .SYNOPSIS
+        Connects to Microsoft Graph unless an existing session already holds all required scopes.
+        Returns $true when this call created the connection (the caller then disconnects it).
+    #>
+    [CmdletBinding()]
+    [OutputType([bool])]
+    param(
+        [Parameter(Mandatory)] [string[]]$Scopes,
+        [string]$TenantId,
+        [string]$ClientId
+    )
+
+    $context = Get-MgContext
+    if ($context -and $context.AuthType -eq 'Delegated' -and (-not $ClientId -or $context.ClientId -eq $ClientId)) {
+        $missing = @($Scopes | Where-Object { $context.Scopes -notcontains $_ })
+        if ($missing.Count -eq 0) {
+            Write-Host ("  Použito existující přihlášení: {0}" -f $context.Account)
+            return $false
+        }
+    }
+
+    $connectParams = @{ Scopes = $Scopes; ContextScope = 'Process'; NoWelcome = $true }
+    if ($TenantId) { $connectParams.TenantId = $TenantId }
+    if ($ClientId) { $connectParams.ClientId = $ClientId }
+    Connect-MgGraph @connectParams | Out-Null
+    return $true
+}
+
 function Join-AuditValue {
     # Flattens a collection into one CSV cell.
     param([object]$Value)
@@ -87,4 +117,4 @@ function Join-AuditValue {
     (@($Value) | Where-Object { $_ -ne $null -and "$_" -ne '' }) -join ', '
 }
 
-Export-ModuleMember -Function Get-AuditOutputFolder, Export-AuditCsv, Export-AuditJson, Assert-AuditModule, Join-AuditValue
+Export-ModuleMember -Function Get-AuditOutputFolder, Export-AuditCsv, Export-AuditJson, Assert-AuditModule, Connect-AuditGraph, Join-AuditValue

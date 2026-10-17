@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     WS0 audit: nastavení sdílení SharePoint Online a OneDrive na úrovni tenantu a jednotlivých webů.
 

@@ -11,6 +11,8 @@ a poté do zabezpečeného úložiště (viz kap. 6). Do Gitu se nikdy necommitu
 | `Get-WS0PublicGroupsReport.ps1` | veřejné týmy a skupiny M365, skupiny bez vlastníka | Microsoft.Graph | Graph: `Group.Read.All` · role Global Reader |
 | `Get-WS0SharingSettingsReport.ps1` | nastavení sdílení tenantu, SharePoint webů a OneDrive (odkazy „Kdokoli“, výchozí odkaz pro celou organizaci) | Microsoft.Online.SharePoint.PowerShell | role SharePoint Administrator |
 | `Get-WS0SharingLinksReport.ps1` | vytvořené/použité odkazy „Kdokoli“ a „celá organizace“ z auditního logu | ExchangeOnlineManagement | role View-Only Audit Logs / Audit Logs |
+| **`Invoke-WS0Audit.ps1`** | **spustí všech 5 skriptů najednou** (jedno přihlášení ke Graphu) a vytvoří souhrn | všechny výše | všechny výše |
+| `New-WS0Summary.ps1` | ze stažených výstupů vytvoří `WS0-souhrn.md` s nálezy podle závažnosti (bez přístupu k tenantu) | – | – |
 
 ## 1. Příprava pracovní stanice (jednorázově)
 
@@ -46,13 +48,35 @@ nemá souhlas s danými oprávněními, Entra ID zobrazí výzvu k souhlasu:
 - Zaškrtnutí „Consent on behalf of your organization“ **je změna tenantu** (oprávnění pro enterprise
   aplikaci). Zapište ji do protokolu WS0 (kdo, kdy, jaká oprávnění). Oprávnění jsou pouze `*.Read.All`.
 - Alternativa pro klienty s přísnou politikou: vlastní registrace aplikace jen se čtecími oprávněními
-  (připraví WS1 – `scripts/identity`), pak `Connect-MgGraph -ClientId <app-id> -TenantId <tenant>`.
+  (`scripts/identity/New-WS0AuditApp.ps1`, viz `scripts/identity/README.md`), pak audit spouštějte
+  s parametry `-ClientId <app-id> -TenantId <tenant>`.
 
-## 4. Spuštění – krok za krokem
+## 4. Spuštění
+
+### Varianta A – vše jedním příkazem (doporučeno)
+
+PowerShell 7 (`pwsh`) na Windows, z kořene lokálního klonu:
+
+```powershell
+cd C:\Git\ai-platforma
+.\scripts\audit\Invoke-WS0Audit.ps1 `
+    -AdminUrl https://<tenant>-admin.sharepoint.com `
+    -UserPrincipalName <admin-UPN> `
+    -IncludeSignInActivity -IncludeOneDrive -Days 90
+```
+
+- Přihlášení proběhne třikrát: Microsoft Graph (jednou pro licence, MFA i skupiny), SharePoint admin
+  center a Exchange Online. Vždy stejným administrátorským účtem.
+- Bez Entra ID P1/P2 vynechte `-IncludeSignInActivity`. U velkého tenantu zvažte vynechání `-IncludeOneDrive`.
+- Selhání jednoho kroku nezastaví ostatní; stav kroků je v `run-log.json` a v souhrnu.
+- Jednotlivé kroky lze vynechat: `-Skip SharingLinks` (hodnoty: License, Mfa, Groups, SharingSettings, SharingLinks).
+- Na konci vznikne `WS0-souhrn.md` – podklad pro souhrnnou zprávu WS0 (checklist G1).
+
+### Varianta B – skripty jednotlivě
 
 ```powershell
 # 0) Přejděte do kořene repozitáře (jen lokální klon; nic se neposílá do Gitu)
-cd C:\Git\Cleversystems
+cd C:\Git\ai-platforma
 
 # --- PowerShell 7 (pwsh) ---
 # 1) Licence a plány (s posledním přihlášením – vyžaduje Entra ID P1/P2; bez P1 vynechte přepínač)
@@ -79,6 +103,7 @@ Poznámky:
   případně `-SkipSiteDetail` (pak chybí úroveň sdílení jednotlivých webů).
 - Skript 4: pokud hlásí vypnutý auditní log, nic nezapínejte – jde o nález do WS0 (zapnutí je změna tenantu).
 - Každý skript končí hláškou `Hotovo. Nic nebylo změněno.` Chybu nebo varování zkopírujte do protokolu.
+- Souhrn ze samostatně spuštěných skriptů: `.\scripts\audit\New-WS0Summary.ps1 -ReportFolder .\reports\<RRRR-MM-DD>_WS0`
 
 ## 5. Kam se uloží výstupy
 
@@ -95,6 +120,8 @@ Jinou složku zadáte parametrem `-OutputPath`. CSV jsou v UTF-8 s oddělovačem
 | `sharing-tenant.csv`, `sharing-sites.csv` | nastavení sdílení tenantu a webů |
 | `links-audit-events.csv`, `links-audit-by-site.csv` | odkazy „Kdokoli“ / celá organizace z auditu |
 | `*-summary.json` | souhrny pro zprávu WS0 |
+| `run-log.json` | stav jednotlivých kroků (jen u `Invoke-WS0Audit.ps1`) |
+| `WS0-souhrn.md` | nálezy podle závažnosti, klíčová čísla, top weby, veřejné týmy |
 
 ## 6. Uložení a ochrana výstupů po auditu
 
@@ -106,11 +133,16 @@ Jinou složku zadáte parametrem `-OutputPath`. CSV jsou v UTF-8 s oddělovačem
 4. Výstupy neposílejte e-mailem jako přílohu; sdílejte odkazem „Konkrétní lidé“.
 5. Doba uchování: podle smlouvy s klientem (doplnit v šabloně akceptace WS0).
 
-## Ověření syntaxe
+## Ověření syntaxe a testy
 
 Cmdlety, parametry a oprávnění ověřeny 2026-10-13 ze zdrojových souborů dokumentace Microsoft Learn
 (repozitáře `microsoftgraph/microsoft-graph-docs-contrib`, `MicrosoftDocs/microsoftgraph-docs-powershell`,
 `MicrosoftDocs/OfficeDocs-SharePoint-PowerShell`, `MicrosoftDocs/office-docs-powershell`).
 Microsoft Learn MCP nebyl v pracovním prostředí dostupný – **před prvním ostrým během ověřit
 odkazy v hlavičkách skriptů přes Learn MCP** (viz docs/STAV.md, K ověření).
-Skripty byly otestovány jen syntakticky a proti simulovaným cmdletům s fiktivními daty, ne proti reálnému tenantu.
+Skripty jsou testované offline proti simulovaným modulům s fiktivními daty (`tests/Invoke-AuditTests.ps1`,
+spouští se i v GitHub Actions). Proti reálnému tenantu zatím neproběhly.
+
+Pro vývojáře: soubory `.ps1/.psm1` musí být v UTF-8 **s BOM** (jinak je Windows PowerShell 5.1 přečte
+jako cp1250) a v řetězcích v dvojitých uvozovkách nesmí být české uvozovky „ “ (PowerShell je bere jako
+konec řetězce). Obojí hlídají testy.

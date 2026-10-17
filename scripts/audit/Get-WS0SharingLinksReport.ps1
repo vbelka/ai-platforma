@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     WS0 audit: vytvořené a použité odkazy „Kdokoli“ (anonymní) a odkazy pro celou organizaci – z auditního logu.
 
